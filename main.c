@@ -8,6 +8,7 @@ unsigned long j_strlen(const char* str)
         i++;
     return i;
 }
+
 char j_strcmp(const char* str, const char* str2)
 {
     unsigned long len = j_strlen(str);
@@ -20,6 +21,7 @@ char j_strcmp(const char* str, const char* str2)
     }
     return 1;
 }
+
 void* zero(void* p, unsigned long size)
 {
     unsigned char* pr = p;
@@ -27,14 +29,17 @@ void* zero(void* p, unsigned long size)
         *pr++ = 0;
     return p;
 }
+
 static inline char j_isnum(char c)
 {
     return (c > 47 && c < 58);
 }
+
 static inline char j_isalpha(char c)
 {
     return ((c > 64 && c < 91) || (c > 96 && c < 123));
 }
+
 int j_stoi(const char* str)
 {
     int si = 0;
@@ -58,23 +63,27 @@ typedef enum
     TOK_COMPARE,
     TOK_NUM,
 } Token_Type;
+
 typedef struct
 {
     unsigned long heap;
     unsigned long count; 
     char* content;
 } String;
+
 typedef struct
 {
     Token_Type type;
     String value;
 } Token;
+
 typedef struct
 {
     unsigned long heap;
     unsigned long count;
     Token* content;
 } Token_List;
+
 static Token Token_Init(Token_Type type, String value)
 {
     Token token;
@@ -82,6 +91,7 @@ static Token Token_Init(Token_Type type, String value)
     token.value = value;
     return token;
 }
+
 static String String_Init()
 {
     String str;
@@ -90,6 +100,7 @@ static String String_Init()
     str.content = malloc(sizeof(char));
     return str;
 }
+
 static void String_Push(String* str, char c)
 {
     while(str->count >= str->heap)
@@ -100,6 +111,7 @@ static void String_Push(String* str, char c)
     str->content[str->count++] = c;
     str->content[str->count] = '\0';
 }
+
 static void String_Push_Constant_String(String* str, const char* src)
 {
     for(int i = 0; i < j_strlen(src); ++i)
@@ -107,6 +119,7 @@ static void String_Push_Constant_String(String* str, const char* src)
         String_Push(str, src[i]);
     }
 }
+
 String String_Init_Str(const char* src)
 {
     String str;
@@ -116,12 +129,14 @@ String String_Init_Str(const char* src)
     String_Push_Constant_String(&str, src);
     return str;
 }
+
 void Token_List_Init(Token_List* token_list)
 {
     token_list->count = 0;
     token_list->heap = 1;
     token_list->content = malloc(sizeof(Token));
 }
+
 void Token_List_Push(Token_List* token_list, Token token)
 {
     while(token_list->count >= token_list->heap)
@@ -140,11 +155,11 @@ void Tokenize(const char* source, Token_List* token_list)
 
     while(source[i] != '\0')
     {
+        while(source[i] == '\n' || source[i] == ' ')
+            ++i;
+
         lex_i=0;
         zero(lex, 0xfff);
-        
-        while(source[i] == '\n' || source[i] == '\t')
-            ++i;
 
         if(j_isnum(source[i]))
         {
@@ -202,6 +217,43 @@ void Tokenize(const char* source, Token_List* token_list)
         ++i;
     }
 }
+
+const char* read_file(const char* file_path)
+{
+    FILE* file = fopen(file_path, "rb");
+
+    if (file == NULL) {
+        printf("Error: Failed to open file\n");
+        return NULL;
+    }
+
+    fseek(file, 0L, SEEK_END);
+    long file_size = ftell(file);
+    rewind(file);
+
+    char* buffer = malloc(file_size + 1);
+    if (buffer == NULL) {
+        printf("Error: Failed to allocate memory\n");
+        fclose(file);
+        return NULL;
+    }
+
+    // Read the file contents into the buffer
+    size_t read_size = fread(buffer, 1, file_size, file);
+    if (read_size != file_size) {
+        printf("Error: Failed to read file\n");
+        fclose(file);
+        free(buffer);
+        return NULL;
+    }
+
+    // Null-terminate the buffer
+    buffer[read_size] = '\0';
+
+    fclose(file);
+    return buffer;
+}
+
 char Command_Len(Token_Type type)
 {
     if(type == TOK_MEMORY_WRITE)
@@ -223,9 +275,34 @@ char Command_Len(Token_Type type)
     return 0;
 }
 
+void Clean_Source(const char** source)
+{
+    char *temp = malloc(j_strlen(*source) + 1);
+    int i = 0, j = 0;
+    for(i = 0; i < j_strlen(*source); ++i)
+    {
+        while((*source)[i] == '\n' && (*source)[i-1] == '\n')
+        {
+            ++i;
+        }
+        temp[j++] = (*source)[i];
+    }
+    temp[j] = '\0';
+    for(i = 0; i < j_strlen(temp); ++i)
+    {
+        if(temp[i] == '\n')
+            temp[i] = ' ';
+    }
+    *source = temp;
+}
+
 int main(void)
 {
-    const char* source = "mw 10 45\nmw 20 50\nadd 10 20\nmw 500 1\ncall 0";
+    const char* source = read_file("test.jz");
+    if(source == NULL)
+        return 1;
+    Clean_Source(&source);
+
     Token_List token_list;
     Token_List_Init(&token_list);
     Tokenize(source, &token_list);
